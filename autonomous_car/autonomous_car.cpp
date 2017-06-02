@@ -58,6 +58,9 @@ int _tmain(int argc, _TCHAR* argv[])
 	cout << x1.x << " : " << x1.y << endl;
 	cout << x2.x << " : " << x2.y << endl;
 
+	/////////////////////////////////////////
+	cout << x2.x << "Github test" << x2.y << endl;
+	/////////////////////////////////////////
 
 	while (1){
 		bool bSuccess = cap.read(frame); // read a new frame from videoMat frame;
