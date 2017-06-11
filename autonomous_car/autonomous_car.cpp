@@ -13,10 +13,21 @@ using namespace std;
 using namespace cv;
 
 void findRoad(Mat &img);
+void myClustered(Mat &img);
+void findCenter();
 
 double width_scale = 0.8;
 double height_scale = 0.2;
 
+Point2d x1, x2;
+const int K = 4;  //Kmean 1~8
+//int colors[4] = { 127, 85, 42, 21 };
+Mat centers; //Kmeans center
+double max_u = INT_MIN, min_u = INT_MAX;
+double max_v = INT_MIN, min_v = INT_MAX;
+
+const String videoFilename = "C:\\GE\\School_project\\test_MOV\\t4.mp4";
+VideoCapture cap(videoFilename);
 
 int _tmain(int argc, _TCHAR* argv[])
 {
@@ -29,8 +40,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		return -1;
 	}
 	*/
-	String videoFilename = "C:\\GE\\School_project\\test_MOV\\t1.mp4";
-	VideoCapture cap(videoFilename);
+
 	if (!cap.isOpened()){
 		//error in opening the video input
 		cerr << "Unable to open video file: " << videoFilename << endl;
@@ -43,7 +53,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	Mat roi;
 	bool bSuccess = cap.read(frame); // read a new frame from videoMat frame;
 	if (!bSuccess) return 0;
-	Point2d x1, x2;
+
 
 	resize(frame, frame, cv::Size(frame.cols / 2, frame.rows / 2));
 
@@ -57,11 +67,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	cout << frame.rows << " : " << frame.cols << endl;
 	cout << x1.x << " : " << x1.y << endl;
 	cout << x2.x << " : " << x2.y << endl;
-
-	/////////////////////////////////////////
-	cout << x2.x << "Github test" << x2.y << endl;
-	/////////////////////////////////////////
-
+	findCenter();
 	while (1){
 		bool bSuccess = cap.read(frame); // read a new frame from videoMat frame;
 
@@ -87,10 +93,12 @@ int _tmain(int argc, _TCHAR* argv[])
 	return 0;
 }
 
-void findRoad(Mat &img){
+void findRoad(Mat &img)
+{
+
 	GaussianBlur(img, img, Size(9, 9), 0, 0);
 	cvtColor(img, img, CV_BGR2YUV);
-	//GaussianBlur(img, img, Size(9, 9), 0, 0);
+	
 	Mat hsv_planes[3];
 	Mat tmp = img.clone();
 	split(tmp, hsv_planes);
@@ -129,12 +137,141 @@ void findRoad(Mat &img){
 
 	namedWindow("calcHist Demo", CV_WINDOW_AUTOSIZE);
 	imshow("calcHist Demo", histImage);
-
-
+	
+	myClustered(img);
 
 	//cvtColor(img, img, CV_RGB2GRAY);
 	
 	
 	//threshold(img, img, 160, 255, THRESH_BINARY);
 }
+
+void findCenter()
+{
+	Mat img;
+	for (int c = 0; c < 100; c++){
+		bool bSuccess = cap.read(img); // read a new frame from videoMat frame;
+
+		if (bSuccess){
+			resize(img, img, cv::Size(img.cols / 2, img.rows / 2));
+			img = img(Rect(x1, x2)).clone();
+
+			GaussianBlur(img, img, Size(9, 9), 0, 0);
+			cvtColor(img, img, CV_BGR2YUV);
+
+			Mat src;
+			resize(img, src, cv::Size(img.cols / 3, img.rows / 3));
+			Mat p = Mat::zeros(src.cols*src.rows, 2, CV_32F);
+			Mat bestLabels, clustered;
+
+			//Mat bgr = src.reshape(1, src.rows*src.cols);
+			Mat yuv[3];
+			split(src, yuv);
+
+			for (int i = 0; i<src.cols*src.rows; i++) {
+				//p.at<float>(i, 0) = yuv[0].data[i] / 255.0;
+				p.at<float>(i, 0) = yuv[1].data[i] / 255.0;
+				p.at<float>(i, 1) = yuv[2].data[i] / 255.0;
+			}
+
+			//bgr.convertTo(p, CV_32FC3, 1.0 / 255.0);
+
+			kmeans(p, K, bestLabels,
+				TermCriteria(CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 10, 1.0),
+				3, KMEANS_PP_CENTERS, centers);
+
+
+			double tmp_u, tmp_v;
+			
+			for (int i = 0; i < K; i++){
+				tmp_u = centers.at<float>(i, 0);
+				tmp_v = centers.at<float>(i, 1);
+				if (min_u > tmp_u) min_u = tmp_u;
+				if (max_u < tmp_u) max_u = tmp_u;
+				if (min_v > tmp_v) min_v = tmp_v;
+				if (max_v < tmp_v) max_v = tmp_v;
+				cout << tmp_u << " : " << tmp_v << endl;
+			}
+			cout << "MAX_U: " << max_u << " -- MIN_U: " << min_u << endl;
+			cout << "MAX_V: " << max_v << " -- MIN_V: " << min_v << endl;
+			cout << "----------------------------------" << endl;
+
+		}
+		else exit(0);
+		
+	}
+
+}
+
+void myClustered(Mat &img)
+{
+	Mat src;
+	resize(img, src, cv::Size(img.cols / 3, img.rows / 3));
+	Mat p = Mat::zeros(src.cols*src.rows, 2, CV_32F);
+	Mat bestLabels, clustered;
+
+	//Mat bgr = src.reshape(1, src.rows*src.cols);
+	Mat yuv[3];
+	split(src, yuv);
+
+	for (int i = 0; i<src.cols*src.rows; i++) {
+		//p.at<float>(i, 0) = yuv[0].data[i] / 255.0;
+		p.at<float>(i, 0) = yuv[1].data[i] / 255.0;
+		p.at<float>(i, 1) = yuv[2].data[i] / 255.0;
+	}
+
+	//bgr.convertTo(p, CV_32FC3, 1.0 / 255.0);
+
+	cout << "p is of size: " << p.rows << "x" << p.cols << endl;
+
+	//KMEANS_USE_INITIAL_LABELS   KMEANS_PP_CENTERS   KMEANS_RANDOM_CENTERS
+
+	kmeans(p, K, bestLabels,
+		TermCriteria(CV_TERMCRIT_EPS + CV_TERMCRIT_ITER, 10, 1.0),
+		3, KMEANS_PP_CENTERS, centers);
+	cout << "MAX_U: " << max_u << " -- MIN_U: " << min_u << endl;
+	cout << "MAX_V: " << max_v << " -- MIN_V: " << min_v << endl;
+	cout << centers << endl;
+	cout << "----------------------------------" << endl;
+
+	clustered = Mat(src.rows, src.cols, CV_32F);
+	int cntR = 0, cntNR = 0;
+	double tmp_u, tmp_v;
+	int arr[4] = { 127, 85, 42, 21 };
+	int colors[K] = {0};
+
+	for (int i = 0; i<K; i++) {
+		tmp_u = centers.at<float>(i, 0);
+		tmp_v = centers.at<float>(i, 1);
+		if (tmp_u <= max_u + 0.01 && tmp_u >= min_u - 0.01){
+			if (tmp_v <= max_v + 0.01  && tmp_v >= min_v - 0.01) colors[i] = 255;
+			else colors[i] = 0;
+		}
+		else colors[i] = 0;
+	}
+
+	for (int i = 0; i<src.cols*src.rows; i++) {
+		clustered.at<float>(i / src.cols, i%src.cols) = (float)(colors[bestLabels.at<int>(0, i)]);
+	}
+	/*
+	double t = (double)cntR / (cntR + cntNR);
+	double tt = (double)cntNR / (cntR + cntNR);
+	if (t >= 0.7) threshold(clustered, clustered, 128, 255, THRESH_BINARY);
+	else threshold(clustered, clustered, 128, 255, THRESH_BINARY_INV);
+	*/
+	clustered.convertTo(clustered, CV_8U);
+
+	/*
+	for (int i = 0; i<3; i++) {
+		circle(clustered, Point(centers.at<float>(i, 0)*255, centers.at<float>(i, 1)*255), 4, Scalar(0));
+		cout << Point(centers.at<float>(i, 0)*255, centers.at<float>(i, 1)*255) << endl;
+	}
+	*/
+	cout << clustered.rows << " : " << clustered.cols << endl;
+	
+	//resize(centers, centers, cv::Size(centers.cols * 30, centers.rows * 30));
+	//imshow("center", centers);
+	imshow("clustered", clustered);
+}
+
 
